@@ -43,30 +43,36 @@ VERSION = 1.1.0
 CONFIG(hardening):unix:!macx {
     message("Using additional compiler flags for hardening purposes.")
 
-    SANITIZER_FLAGS = -fsanitize=address -fsanitize=undefined -fsanitize=integer-divide-by-zero -fvtable-verify=std
+    SANITIZER_FLAGS = -fsanitize=address -fsanitize=undefined -fvtable-verify=std
 
-    system(which g++-5 >/dev/null ) | system(g++ --version 2>/dev/null | grep -e "5.[0-9]" >/dev/null) {
+    CONFIG(gcc5) {
+      system(which g++-5 >/dev/null ) | system(g++ --version 2>/dev/null | grep -e "5.[0-9]" >/dev/null) {
         message( "g++ version 5.x found" )
-        QMAKE_CC = $(shell which g++-5)
+        QMAKE_CC = $(shell which gcc-5)
         QMAKE_CXX = $(shell which g++-5)
-        SANITIZER_FLAGS += -fsanitize=bounds -fsanitize=vptr -fsanitize=object-size -fsanitize=alignment -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow
+
+        CC = $(shell which gcc-5)
+        CXX = $(shell which g++-5)
+        export(CC)
+        export(CXX)
+
+        SANITIZER_FLAGS += -fsanitize=bounds -fsanitize=vptr -fsanitize=object-size -fsanitize=alignment
+      }
     }
 
-    # If hardening-wrapper is installed, then use the configured flags
+    # If hardening-wrapper is installed, then additionally use those configured flags
     exists(/usr/share/man/man1/hardening-wrapper.1.gz) {
         message("Gathering compiler hardening flags from hardening-wrapper installation.")
-        L_CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS)
-        L_CFLAGS   = $(shell dpkg-buildflags --get CFLAGS)
-        L_CXXFLAGS = $(shell dpkg-buildflags --get CXXFLAGS)
-        L_LDFLAGS  = $(shell dpkg-buildflags --get LDFLAGS)
-    }
-    else {
-        L_CPPFLAGS = -fstackprotector-strong -fPIC -pie -D_FORTIFY_SOURCE=2 -Wformat -Wformat-security -Werror=format-security -dumpmachine -Wall -Wsecurity
+        L_CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS) -fPIC
+        L_CFLAGS   = $(shell dpkg-buildflags --get CFLAGS) -fPIC
+        L_CXXFLAGS = $(shell dpkg-buildflags --get CXXFLAGS) -fPIC
+        L_LDFLAGS  = $(shell dpkg-buildflags --get LDFLAGS) -fPIC
+    } else {
+        L_CPPFLAGS = -fstack-protector-strong -fPIE -pie -fPIC -D_FORTIFY_SOURCE=2 -Wformat -Wformat-security -Werror=format-security -dumpmachine -Wall -Wsecurity $${SANITIZER_FLAGS}
         L_CFLAGS   = $${L_CPPFLAGS} -g -O2
         L_CXXFLAGS = $${L_CFLAGS}
-        L_LDFLAGS  = $${L_CPPFLAGS} -Wl,-z,relro
+        L_LDFLAGS  = $${L_CPPFLAGS} -Wl,-z,relro,-z,now $${SANITIZER_FLAGS}
     }
-    L_LDFLAGS *= -Wl,-z,relro,-z,now
 
     QMAKE_CPPFLAGS *= $${L_CPPFLAGS} $${SANITIZER_FLAGS}
     QMAKE_CFLAGS   *= $${L_CFLAGS} $${SANITIZER_FLAGS}
